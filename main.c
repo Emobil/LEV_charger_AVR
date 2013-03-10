@@ -241,7 +241,7 @@ void adca_init(void)
 	_delay_ms(1);
 	// Perform several offset measurements and store the mean value
 	offs=0;
-	for (i=0; i<16; i++)
+	for (i=0; i<32; i++)
 	{
 	    // Start the AD conversion on channel 0
 	    ADCA.CH0.CTRL|=ADC_CH_START_bm;
@@ -255,7 +255,7 @@ void adca_init(void)
 	// Disable the ADC	
 	ADCA.CTRLA&= ~ADC_ENABLE_bm;
 	// Store the mean value of the offset
-	adca_offset=(unsigned char) (offs/16);
+	adca_offset=(unsigned char) (offs/32);
 
 	// Initialize the ADC Compare register
 	ADCA.CMPL=0x00;
