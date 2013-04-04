@@ -110,7 +110,6 @@ int main(void)
 	OUTPUT_EN;
 	_delay_ms(1);
 
-
 	/* enable controller */
 	//EN_CHARGER;
 	EN_MPP;
@@ -125,6 +124,7 @@ int main(void)
 		adca_data_2 = adca_read(2);		
 		adca_data_3 = adca_read(3); 
 		_delay_ms(1);
+
 
 		/* actualize TWI registers */
 		twiSlave.sendData[0] = (adca_data_0 >> 8);
@@ -207,7 +207,7 @@ signed int adca_read(unsigned char channel)
 
 	ADCA.CTRLA &= ~ADC_ENABLE_bm;	// disable ADC
 	// Compensate the ADC offset	
-	if(data >= adca_offset){ data-=adca_offset;}
+	//if(data >= adca_offset){ data-=adca_offset;}
 	return data;	
 }
 
@@ -221,9 +221,11 @@ void adca_init(void)
 	ADCA.CALH=read_calibration_byte(PROD_SIGNATURES_START+ADCACAL1_offset);
 
 	// Conversion mode: Unsigned
-	ADCA.CTRLB=(ADCA.CTRLB & (~(ADC_CONMODE_bm | ADC_FREERUN_bm | ADC_RESOLUTION_gm))) |
-	ADC_RESOLUTION_12BIT_gc;
+//	ADCA.CTRLB=(ADCA.CTRLB & (~(ADC_CONMODE_bm | ADC_FREERUN_bm | ADC_RESOLUTION_gm))) |ADC_RESOLUTION_12BIT_gc;
 
+	// Conversion mode: Signed
+//	ADCA.CTRLB=(ADCA.CTRLB & (~(ADC_FREERUN_bm | ADC_RESOLUTION_gm))) |ADC_RESOLUTION_12BIT_gc;
+	ADCA.CTRLB=0x10;
 	// Clock frequency: 125,000 kHz
 	ADCA.PRESCALER=(ADCA.PRESCALER & (~ADC_PRESCALER_gm)) | ADC_PRESCALER_DIV16_gc;
 
