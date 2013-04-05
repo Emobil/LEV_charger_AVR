@@ -6,64 +6,7 @@
 #include "twi_slave_driver.h"
 #include <util/delay.h>
 
-/*! Defining an example slave address. */
-#define SLAVE_ADDRESS    0x55
-
-/*! Defining number of bytes in buffer. */
-#define TWI_NUM_BYTES        10
-
-/*! CPU speed 32MHz, BAUDRATE 100kHz and Baudrate Register Settings */
-#define CPU_SPEED       32000000
-#define BAUDRATE	100000
-#define TWI_BAUDSETTING TWI_BAUD(CPU_SPEED, BAUDRATE)
-
-#define ADCACAL0_offset 0x20	// zum Auslesen ADC Offset aus Flash
-#define ADCACAL1_offset 0x21	// dsgl
-
-#define SG_EN PORTB.OUT |= PIN2_bm
-#define SG_DE PORTB.OUT &= ~PIN2_bm
-
-#define EN_MPP PORTD.OUT |= PIN0_bm
-#define DE_MPP PORTD.OUT &= ~PIN0_bm
-
-#define EN_CHARGER PORTD.OUT |= PIN1_bm
-#define DE_CHARGER PORTD.OUT &= ~PIN1_bm
-
-#define TSS_DAC_CS PORTD.OUT |= PIN2_bm
-#define TSS_DAC_DS PORTD.OUT &= ~PIN2_bm
-
-#define HSS_DAC_CS PORTD.OUT |= PIN3_bm
-#define HSS_DAC_DS PORTD.OUT &= ~PIN3_bm
-
-#define OUTPUT_EN PORTD.OUT |= PIN4_bm
-#define OUTPUT_DE PORTD.OUT &= ~PIN4_bm
-
-#define OUTMON_CS PORTD.OUT |= PIN5_bm
-#define OUTMON_DS PORTD.OUT &= ~PIN5_bm
-
-#define MPP_DAC_CS PIN3
-#define LEV_DAC_CS PIN2
-
-#define PV_MAX_VOLT 	18  // = 76V
-#define PV_MIN_VOLT	157 // = 66V
-
-/* Global variables */
-TWI_Slave_t twiSlave;    
-unsigned char adca_offset;
-signed int adca_data_0, adca_data_1, adca_data_2, adca_data_3;
-
-/* function prototypes */
-void SpiInit(void);
-char SpiRead();
-void SpiWrite(char data);
-char SpiWriteRead(char data);
-void DacSendVolt(unsigned char volt, unsigned char pin);
-void DacHighZ(unsigned char pin);
-signed int adca_read(unsigned char channel);
-uint8_t read_calibration_byte( uint8_t index );
-void adca_init(void);
-void system_clocks_init(void);
-void TWIC_SlaveProcessData(void);
+#include "main.h"
 
 int main(void)
 {
@@ -118,26 +61,26 @@ int main(void)
 
 		DacSendVolt(60, MPP_DAC_CS);
 
-		/* read ADC data */
-		adca_data_0 = adca_read(0);	
-		adca_data_1 = adca_read(1);		
-		adca_data_2 = adca_read(2);		
-		adca_data_3 = adca_read(3); 
-		_delay_ms(1);
+		adca_chan_config(U_BATT,I_BATT,U_SOL,I_SOL);
 
+		/* read ADC data */
+		adca_data_0 = adca_read(0);
+		adca_data_1 = adca_read(1);
+		adca_data_2 = adca_read(2);
+		adca_data_3 = adca_read(3); 
 
 		/* actualize TWI registers */
 		twiSlave.sendData[0] = (adca_data_0 >> 8);
 		twiSlave.sendData[1] = (adca_data_0 & 0xFF); 
-
 		twiSlave.sendData[2] = (adca_data_1 >> 8);
 		twiSlave.sendData[3] = (adca_data_1 & 0xFF); 
-
 		twiSlave.sendData[4] = (adca_data_2 >> 8);
 		twiSlave.sendData[5] = (adca_data_2 & 0xFF); 
-
 		twiSlave.sendData[6] = (adca_data_3 >> 8);
 		twiSlave.sendData[7] = (adca_data_3 & 0xFF); 
+
+		_delay_ms(10);
+
 	}
 }
 
@@ -189,26 +132,64 @@ void DacSendVolt(unsigned char volt, unsigned char pin)
 // ADCA channel data read function using polled mode
 signed int adca_read(unsigned char channel)
 {
-	ADCA.CTRLA |= ADC_ENABLE_bm;	// enable ADC
-	_delay_us(1);
+//	ADCA.CTRLA |= ADC_ENABLE_bm;	// enable ADC
+//	_delay_us(1);
 	ADC_CH_t *pch=&ADCA.CH0+channel;
 	signed int data;
 
 	// Start the AD conversion
-	pch->CTRL|=ADC_CH_START_bm;
+//	pch->CTRL|=ADC_CH_START_bm;
 	// Wait for the AD conversion to complete
-	while ((pch->INTFLAGS & ADC_CH_CHIF_bm)==0);
+//	while ((pch->INTFLAGS & ADC_CH_CHIF_bm)==0);
 	// Clear the interrupt flag
-	pch->INTFLAGS=ADC_CH_CHIF_bm;
+//	pch->INTFLAGS=ADC_CH_CHIF_bm;
 	// Read the AD conversion result
 	((unsigned char *) &data)[0]=pch->RESL;
 	((unsigned char *) &data)[1]=pch->RESH;
 
-
-	ADCA.CTRLA &= ~ADC_ENABLE_bm;	// disable ADC
+//	ADCA.CTRLA &= ~ADC_ENABLE_bm;	// disable ADC
 	// Compensate the ADC offset	
 	//if(data >= adca_offset){ data-=adca_offset;}
 	return data;	
+}
+
+
+void adca_chan_config(uint8_t c0,uint8_t c1,uint8_t c2,uint8_t c3){
+// ADC channel 0 gain: 1
+	// ADC channel 0 input mode: Single-ended positive input signal
+	ADCA.CH0.CTRL=(ADCA.CH0.CTRL & (~(ADC_CH_START_bm | ADC_CH_GAINFAC_gm | ADC_CH_INPUTMODE_gm))) |
+	ADC_CH_GAIN_1X_gc | ADC_CH_INPUTMODE_SINGLEENDED_gc;
+
+	// ADC channel 0 positive input: ADC0 pin
+	// ADC channel 0 negative input: GND
+	ADCA.CH0.MUXCTRL=(ADCA.CH0.MUXCTRL & (~(ADC_CH_MUXPOS_gm | ADC_CH_MUXNEG_gm))) | c0;
+
+	// ADC channel 1 gain: 1
+	// ADC channel 1 input mode: Single-ended positive input signal
+	ADCA.CH1.CTRL=(ADCA.CH1.CTRL & (~(ADC_CH_START_bm | ADC_CH_GAINFAC_gm | ADC_CH_INPUTMODE_gm))) |
+	ADC_CH_GAIN_1X_gc | ADC_CH_INPUTMODE_SINGLEENDED_gc;
+
+	// ADC channel 1 positive input: ADC1 pin
+	// ADC channel 1 negative input: GND
+	ADCA.CH1.MUXCTRL=(ADCA.CH1.MUXCTRL & (~(ADC_CH_MUXPOS_gm | ADC_CH_MUXNEG_gm))) | c1;
+
+	// ADC channel 2 gain: 1
+	// ADC channel 2 input mode: Single-ended positive input signal
+	ADCA.CH2.CTRL=(ADCA.CH2.CTRL & (~(ADC_CH_START_bm | ADC_CH_GAINFAC_gm | ADC_CH_INPUTMODE_gm))) |
+	ADC_CH_GAIN_1X_gc | ADC_CH_INPUTMODE_SINGLEENDED_gc;
+
+	// ADC channel 2 positive input: ADC2 pin	
+	// ADC channel 2 negative input: GND
+	ADCA.CH2.MUXCTRL=(ADCA.CH2.MUXCTRL & (~(ADC_CH_MUXPOS_gm | ADC_CH_MUXNEG_gm))) | c2;
+
+	// ADC channel 3 gain: 1	
+	// ADC channel 3 input mode: Single-ended positive input signal
+	ADCA.CH3.CTRL=(ADCA.CH3.CTRL & (~(ADC_CH_START_bm | ADC_CH_GAINFAC_gm | ADC_CH_INPUTMODE_gm))) |
+	ADC_CH_GAIN_1X_gc | ADC_CH_INPUTMODE_SINGLEENDED_gc;
+
+	// ADC channel 3 positive input: ADC3 pin
+	// ADC channel 3 negative input: GND
+	ADCA.CH3.MUXCTRL=(ADCA.CH3.MUXCTRL & (~(ADC_CH_MUXPOS_gm | ADC_CH_MUXNEG_gm))) | c3;
 }
 
 void adca_init(void)
@@ -263,46 +244,7 @@ void adca_init(void)
 	ADCA.CMPL=0x00;
 	ADCA.CMPH=0x00;
 
-	// ADC channel 0 gain: 1
-	// ADC channel 0 input mode: Single-ended positive input signal
-	ADCA.CH0.CTRL=(ADCA.CH0.CTRL & (~(ADC_CH_START_bm | ADC_CH_GAINFAC_gm | ADC_CH_INPUTMODE_gm))) |
-	ADC_CH_GAIN_1X_gc | ADC_CH_INPUTMODE_SINGLEENDED_gc;
-
-	// ADC channel 0 positive input: ADC0 pin
-	// ADC channel 0 negative input: GND
-	ADCA.CH0.MUXCTRL=(ADCA.CH0.MUXCTRL & (~(ADC_CH_MUXPOS_gm | ADC_CH_MUXNEG_gm))) |
-	ADC_CH_MUXPOS_PIN2_gc;
-
-	// ADC channel 1 gain: 1
-	// ADC channel 1 input mode: Single-ended positive input signal
-	ADCA.CH1.CTRL=(ADCA.CH1.CTRL & (~(ADC_CH_START_bm | ADC_CH_GAINFAC_gm | ADC_CH_INPUTMODE_gm))) |
-	ADC_CH_GAIN_1X_gc | ADC_CH_INPUTMODE_SINGLEENDED_gc;
-
-	// ADC channel 1 positive input: ADC1 pin
-	// ADC channel 1 negative input: GND
-	ADCA.CH1.MUXCTRL=(ADCA.CH1.MUXCTRL & (~(ADC_CH_MUXPOS_gm | ADC_CH_MUXNEG_gm))) |
-	ADC_CH_MUXPOS_PIN3_gc;
-
-	// ADC channel 2 gain: 1
-	// ADC channel 2 input mode: Single-ended positive input signal
-	ADCA.CH2.CTRL=(ADCA.CH2.CTRL & (~(ADC_CH_START_bm | ADC_CH_GAINFAC_gm | ADC_CH_INPUTMODE_gm))) |
-	ADC_CH_GAIN_1X_gc | ADC_CH_INPUTMODE_SINGLEENDED_gc;
-
-	// ADC channel 2 positive input: ADC2 pin	
-	// ADC channel 2 negative input: GND
-	ADCA.CH2.MUXCTRL=(ADCA.CH2.MUXCTRL & (~(ADC_CH_MUXPOS_gm | ADC_CH_MUXNEG_gm))) |
-	ADC_CH_MUXPOS_PIN4_gc;
-
-	// ADC channel 3 gain: 1	
-	// ADC channel 3 input mode: Single-ended positive input signal
-	ADCA.CH3.CTRL=(ADCA.CH3.CTRL & (~(ADC_CH_START_bm | ADC_CH_GAINFAC_gm | ADC_CH_INPUTMODE_gm))) |
-	ADC_CH_GAIN_1X_gc | ADC_CH_INPUTMODE_SINGLEENDED_gc;
-
-	// ADC channel 3 positive input: ADC3 pin
-	// ADC channel 3 negative input: GND
-	ADCA.CH3.MUXCTRL=(ADCA.CH3.MUXCTRL & (~(ADC_CH_MUXPOS_gm | ADC_CH_MUXNEG_gm))) |
-	ADC_CH_MUXPOS_PIN5_gc;
-
+	
 	// ADC is free-running, sweeped channel(s): 0, 1, 2, 3
 	ADCA.EVCTRL=ADC_SWEEP_0123_gc | ADC_EVACT_NONE_gc;
 
@@ -325,7 +267,7 @@ void adca_init(void)
 	// Enable the ADC
 	ADCA.CTRLA|=ADC_ENABLE_bm;
 	// Insert a delay to allow the ADC common mode voltage to stabilize
-	delay_us(2);
+	//delay_us(2);
 }
 
 uint8_t read_calibration_byte( uint8_t index ) 
