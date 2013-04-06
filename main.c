@@ -27,7 +27,7 @@ int main(void)
 	PMIC.CTRL |= PMIC_LOLVLEN_bm;
 	sei();
 	
-	/* init OUTPUT_ENSPI, I2C, ADC */
+	/* init SPI, I2C, ADC */
  	SpiInit();
 	TWI_SlaveInitializeDriver(&twiSlave, &TWIC, TWIC_SlaveProcessData);
 	TWI_SlaveInitializeModule(&twiSlave, SLAVE_ADDRESS, TWI_SLAVE_INTLVL_MED_gc);
@@ -41,12 +41,12 @@ int main(void)
 	OUTMON_DS;
 
 	/* configure feedback voltages */
-//	DacSendVolt(197, LEV_DAC_CS);
-	DacSendVolt(20, MPP_DAC_CS);
+	DacSendVolt(197, LEV_DAC_CS);
+//	DacSendVolt(20, MPP_DAC_CS);
 	_delay_ms(1);
 
 	/* enable input switch */
-	SG_EN;
+//	SG_EN;
 	_delay_ms(1);
 
 	/* enable output switch*/
@@ -54,14 +54,17 @@ int main(void)
 	_delay_ms(1);
 
 	/* enable controller */
-	//EN_CHARGER;
-	EN_MPP;
+	EN_CHARGER;
+//	EN_MPP;
+		
+	adca_chan_config(U_CHAR,I_CHAR,I_BATT_OUT,U_BATT);
 
 	while (1) {
 
-		DacSendVolt(60, MPP_DAC_CS);
+//		DacSendVolt(60, MPP_DAC_CS);
+//		adca_chan_config(U_BATT,I_BATT,U_SOL,I_SOL);
 
-		adca_chan_config(U_BATT,I_BATT,U_SOL,I_SOL);
+		DacSendVolt(197, LEV_DAC_CS);
 
 		/* read ADC data */
 		adca_data_0 = adca_read(0);
@@ -154,7 +157,8 @@ signed int adca_read(unsigned char channel)
 }
 
 
-void adca_chan_config(uint8_t c0,uint8_t c1,uint8_t c2,uint8_t c3){
+void adca_chan_config(uint8_t c0,uint8_t c1,uint8_t c2,uint8_t c3)
+{
 // ADC channel 0 gain: 1
 	// ADC channel 0 input mode: Single-ended positive input signal
 	ADCA.CH0.CTRL=(ADCA.CH0.CTRL & (~(ADC_CH_START_bm | ADC_CH_GAINFAC_gm | ADC_CH_INPUTMODE_gm))) |
@@ -339,9 +343,8 @@ void system_clocks_init(void)
 // PORTC:7 - SCK
 void SpiInit(void)
 {
-  PORTC.DIR |= PIN5_bm | PIN7_bm | PIN4_bm;
+  PORTC.DIR |= PIN5_bm | PIN6_bm | PIN7_bm;
   PORTC.PIN4CTRL = PORT_OPC_WIREDANDPULL_gc; 	// Pull-up SS 
-  PORTD.DIR |= PIN3_bm;  
   // enable SPI master mode, CLK/64 (@32MHz=>500KHz)
   SPIC.CTRL |= SPI_MASTER_bm | SPI_MODE_1_gc | SPI_PRESCALER_DIV16_gc ;
   SPIC.INTCTRL = PMIC_LOLVLEN_bm; // enable LOW LEVEL INTERRUPT 
