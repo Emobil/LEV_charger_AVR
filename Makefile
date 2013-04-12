@@ -43,7 +43,7 @@ MCU = atxmega32a4
 # Main Oscillator Frequency
 # This is only used to define F_OSC in all assembler and c-sources.
 #F_OSC = 3686400
-F_CPU = 20000000L
+F_CPU = 32000000L
 
 # Output format. (can be srec, ihex, binary)
 FORMAT = ihex
@@ -53,7 +53,7 @@ TARGET = main
 
 
 # List C source files here. (C dependencies are automatically generated.)
-SRC = $(TARGET).c twi_slave_driver.c 
+SRC = $(TARGET).c twi_slave_driver.c clksys_driver.c
 
 
 # List Assembler source files here.
@@ -176,6 +176,7 @@ LDFLAGS += $(PRINTF_LIB) $(SCANF_LIB) $(MATH_LIB)
 # Type: avrdude -c ?
 # to get a full listing.
 #
+#AVRDUDE_PROGRAMMER = jtagmkII
 AVRDUDE_PROGRAMMER = avrisp2 
 
 # com1 = serial port. Use lpt1 to connect to parallel port.

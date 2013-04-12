@@ -6,7 +6,10 @@
 #include "twi_slave_driver.h"
 #include <util/delay.h>
 
+#include "clksys_driver.h"
 #include "main.h"
+
+unsigned char leds,time = 0x00;
 
 int main(void)
 {
@@ -55,16 +58,28 @@ int main(void)
 
 	/* enable controller */
 	EN_CHARGER;
-//	EN_MPP;
+	EN_MPP;
 		
 	adca_chan_config(U_CHAR,I_CHAR,I_BATT_OUT,U_BATT);
 
+	PORTC.DIR |= (1<<PIN7)|(1<<PIN5);
+
+	/* Set up Timer/Counter 0 to work from CPUCLK/64, with period 10000 */
+	TCC0.PER = 10000;
+	TCC0.CTRLA = ( TCC0.CTRLA & ~TC0_CLKSEL_gm ) | TC_CLKSEL_DIV64_gc;
+
+	/* Enable timer 0 overflow interrupt */
+	TCC0.INTCTRLA = ( TCC0.INTCTRLA & ~TC0_OVFINTLVL_gm ) | TC_OVFINTLVL_MED_gc;
+
 	while (1) {
+	
+//	 	PORTC.OUTTGL = PIN5_bm | PIN7_bm; /* PA3 togglw */
+		_delay_us(1);
+		
+		DacSendVolt(60, MPP_DAC_CS);
+		adca_chan_config(U_BATT,I_BATT,U_SOL,I_SOL);
 
-//		DacSendVolt(60, MPP_DAC_CS);
-//		adca_chan_config(U_BATT,I_BATT,U_SOL,I_SOL);
-
-		DacSendVolt(197, LEV_DAC_CS);
+		//DacSendVolt(197, LEV_DAC_CS);
 
 		/* read ADC data */
 		adca_data_0 = adca_read(0);
@@ -83,12 +98,20 @@ int main(void)
 		twiSlave.sendData[7] = (adca_data_3 & 0xFF); 
 
 		_delay_ms(10);
-
 	}
 }
 
-
-
+/* Toggle LED(s) every 1s */
+ISR(TCC0_OVF_vect)
+{
+	time++;
+	if(time >= 50){
+		//if(leds <16){leds++;}else {leds = 0x00;}
+//		LEDPORT.OUT = leds; 
+		time = 0x00;
+		LEDPORT.OUTTGL = 0xFF;
+	}
+}
 
 /*! TWIC Slave Interrupt vector. */
 ISR(TWIC_TWIS_vect)
@@ -96,12 +119,10 @@ ISR(TWIC_TWIS_vect)
 	TWI_SlaveInterruptHandler(&twiSlave);
 }
 
-
 void TWIC_SlaveProcessData(void)
 {
 	PORTE.OUT = twiSlave.receivedData[2];
 }
-
 
 void DacHighZ(unsigned char pin)
 {
@@ -114,7 +135,6 @@ void DacHighZ(unsigned char pin)
 	PORTD.OUT |= (1<<pin);
   	SPIC.CTRL &= ~SPI_ENABLE_bm;
 }
-
 
 void DacSendVolt(unsigned char volt, unsigned char pin)
 {
@@ -130,7 +150,6 @@ void DacSendVolt(unsigned char volt, unsigned char pin)
 	  	SPIC.CTRL &= ~SPI_ENABLE_bm;
 	}
 }
-
 
 // ADCA channel data read function using polled mode
 signed int adca_read(unsigned char channel)
@@ -288,53 +307,25 @@ uint8_t read_calibration_byte( uint8_t index )
 	return( result ); 
 } 
 
-
 void system_clocks_init(void)
 {
-	unsigned char n,s;
-
-	// Save interrupts enabled/disabled state
-	s=SREG;
-	// Disable interrupts
-	cli();
-
-	// Internal 32 MHz RC oscillator initialization
-	// Enable the external 20 MHz oscillator
-	OSC.CTRL|=OSC_XOSCEN_bm;
-
-	// System Clock prescaler A division factor: 2
-	// System Clock prescalers B & C division factors: B:1, C:1
-	// ClkPer4: 16000,000 kHz
-	// ClkPer2: 16000,000 kHz
-	// ClkPer:  16000,000 kHz
-	// ClkCPU:  16000,000 kHz
-	n=(CLK.PSCTRL & (~(CLK_PSADIV_gm | CLK_PSBCDIV1_bm | CLK_PSBCDIV0_bm))) |
-	CLK_PSADIV_2_gc | CLK_PSBCDIV_1_1_gc;
-	CCP=CCP_IOREG_gc;
-	CLK.PSCTRL=n;
-
-	// Disable the autocalibration of the internal 32 MHz RC oscillator
-	//DFLLRC32M.CTRL&= ~DFLL_ENABLE_bm;
-
-	// Wait for the internal 32 MHz RC oscillator to stabilize
-	//while ((OSC.STATUS & OSC_RC32MRDY_bm)==0);
-
-	// Select the system clock source: 32 MHz Internal RC Osc.
-	//n=(CLK.CTRL & (~CLK_SCLKSEL_gm)) | CLK_SCLKSEL_RC32M_gc;
-	//CCP=CCP_IOREG_gc;
-	//CLK.CTRL=n;
-
-	// Disable the unused oscillators: 2 MHz, internal 32 kHz, external clock/crystal oscillator, PLL
-	OSC.CTRL&= ~(OSC_RC2MEN_bm | OSC_RC32KEN_bm | OSC_RC32MEN_bm | OSC_PLLEN_bm);
-
-	// Peripheral Clock output: Disabled
-	PORTCFG.CLKEVOUT=(PORTCFG.CLKEVOUT & (~PORTCFG_CLKOUT_gm)) | PORTCFG_CLKOUT_OFF_gc;
-
-	// Restore interrupts enabled/disabled state
-	SREG=s;
-	// Restore optimization for size if needed
-}
-
+	/* konfiguriere Taktquelle */
+	CLKSYS_XOSC_Config(OSC_FRQRANGE_12TO16_gc,false,OSC_XOSCSEL_XTAL_16KCLK_gc);
+	/* aktiviere Taktquelle */
+	CLKSYS_Enable( OSC_XOSCEN_bm );
+	/* konfiguriere PLL, Taktquelle, Faktor */
+	CLKSYS_PLL_Config( OSC_PLLSRC_XOSC_gc, 2 ); 
+	/* aktiviere PLL */
+	CLKSYS_Enable( OSC_PLLEN_bm );
+	/* konfiguriere Prescaler */
+	CLKSYS_Prescalers_Config( CLK_PSADIV_1_gc, CLK_PSBCDIV_1_1_gc );
+	/* warte bis takt stabil */ 
+	do {} while ( CLKSYS_IsReady( OSC_PLLRDY_bm ) == 0 );
+	/* wähle neue Taktquelle */
+	CLKSYS_Main_ClockSource_Select( CLK_SCLKSEL_PLL_gc );
+	/* deaktiviere internen Oszillator */
+	CLKSYS_Disable( OSC_XOSCEN_bm );
+} 
 
 
 // PORTD:3 - HSS_CS  (active low)
@@ -369,3 +360,4 @@ char SpiWriteRead(char data)
   SpiWrite(data);
   return SPIC.DATA;
 };
+

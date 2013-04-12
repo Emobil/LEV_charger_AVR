@@ -9,6 +9,8 @@
 #define BAUDRATE	100000
 #define TWI_BAUDSETTING TWI_BAUD(CPU_SPEED, BAUDRATE)
 
+#define LEDPORT PORTE
+
 #define ADCACAL0_offset 0x20	// zum Auslesen ADC Offset aus Flash
 #define ADCACAL1_offset 0x21	// dsgl
 
