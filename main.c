@@ -4,38 +4,40 @@
 
 #include "avr_compiler.h"
 #include "twi_slave_driver.h"
+#include <stdio.h>
+#include <avr/io.h>
+#include <avr/interrupt.h>
 #include <util/delay.h>
 
 #include "clksys_driver.h"
 #include "main.h"
 
-unsigned char leds,time = 0x00;
+unsigned char leds,time;
 
 int main(void)
 {
 	/* system clocks initialization */
-
 	system_clocks_init(); 
 
 	/* port directions */
-   	PORTA.DIR = 0x00; 		
-   	PORTB.DIR = 0xFF; 			
-	PORTC.DIR |= (1<<PIN0)|(1<<PIN1);	
-	PORTD.DIR = 0xFF;	
-	PORTE.DIR = 0xFF;		
+   	PORTA.DIR = 0x00; 
+   	PORTB.DIR = 0xFF; 
+	PORTC.DIR |= (1<<PIN0)|(1<<PIN1);
+	PORTD.DIR = 0xFF;
+	PORTE.DIR = 0xFF;
 
 	/* configure interrut level */
 	PMIC.CTRL |= PMIC_HILVLEN_bm; 
 	PMIC.CTRL |= PMIC_MEDLVLEN_bm;
 	PMIC.CTRL |= PMIC_LOLVLEN_bm;
 	sei();
-	
+
 	/* init SPI, I2C, ADC */
  	SpiInit();
 	TWI_SlaveInitializeDriver(&twiSlave, &TWIC, TWIC_SlaveProcessData);
 	TWI_SlaveInitializeModule(&twiSlave, SLAVE_ADDRESS, TWI_SLAVE_INTLVL_MED_gc);
 	adca_init();
-	
+
 	/* initial disable controller ICs */
 	DE_MPP;
 	DE_CHARGER;
@@ -44,8 +46,8 @@ int main(void)
 	OUTMON_DS;
 
 	/* configure feedback voltages */
-	DacSendVolt(197, LEV_DAC_CS);
-//	DacSendVolt(20, MPP_DAC_CS);
+//	DacSendVolt(197, LEV_DAC_CS);
+	DacSendVolt(20, MPP_DAC_CS);
 	_delay_ms(1);
 
 	/* enable input switch */
@@ -53,18 +55,18 @@ int main(void)
 	_delay_ms(1);
 
 	/* enable output switch*/
-	OUTPUT_EN;
+//	OUTPUT_EN;
 	_delay_ms(1);
 
 	/* enable controller */
 	EN_CHARGER;
 	EN_MPP;
-		
-	adca_chan_config(U_CHAR,I_CHAR,I_BATT_OUT,U_BATT);
 
-	PORTC.DIR |= (1<<PIN7)|(1<<PIN5);
+//	adca_chan_config(U_CHAR,I_CHAR,I_BATT_OUT,U_BATT);
+	adca_chan_config(U_BATT,I_BATT,U_SOL,I_SOL);
 
 	/* Set up Timer/Counter 0 to work from CPUCLK/64, with period 10000 */
+	/* With 32Mhz -> t=20ms */
 	TCC0.PER = 10000;
 	TCC0.CTRLA = ( TCC0.CTRLA & ~TC0_CLKSEL_gm ) | TC_CLKSEL_DIV64_gc;
 
@@ -72,20 +74,18 @@ int main(void)
 	TCC0.INTCTRLA = ( TCC0.INTCTRLA & ~TC0_OVFINTLVL_gm ) | TC_OVFINTLVL_MED_gc;
 
 	while (1) {
-	
-//	 	PORTC.OUTTGL = PIN5_bm | PIN7_bm; /* PA3 togglw */
-		_delay_us(1);
-		
-		DacSendVolt(60, MPP_DAC_CS);
-		adca_chan_config(U_BATT,I_BATT,U_SOL,I_SOL);
 
-		//DacSendVolt(197, LEV_DAC_CS);
+//	 	PORTC.OUTTGL = PIN5_bm | PIN7_bm; 
+
+//		DacSendVolt(197, LEV_DAC_CS);
+//		DacSendVolt(60, MPP_DAC_CS);
+
 
 		/* read ADC data */
-		adca_data_0 = adca_read(0);
-		adca_data_1 = adca_read(1);
-		adca_data_2 = adca_read(2);
-		adca_data_3 = adca_read(3); 
+		adca_data_0 = adca_read(0); 		_delay_us(1); 
+		adca_data_1 = adca_read(1);		_delay_us(1);
+		adca_data_2 = adca_read(2);		_delay_us(1);
+		adca_data_3 = adca_read(3); 		_delay_us(1);
 
 		/* actualize TWI registers */
 		twiSlave.sendData[0] = (adca_data_0 >> 8);
@@ -97,11 +97,10 @@ int main(void)
 		twiSlave.sendData[6] = (adca_data_3 >> 8);
 		twiSlave.sendData[7] = (adca_data_3 & 0xFF); 
 
-		_delay_ms(10);
 	}
 }
 
-/* Toggle LED(s) every 1s */
+/* Toggle LEDs every 1s */
 ISR(TCC0_OVF_vect)
 {
 	time++;
@@ -138,8 +137,8 @@ void DacHighZ(unsigned char pin)
 
 void DacSendVolt(unsigned char volt, unsigned char pin)
 {
-	if(volt > PV_MIN_VOLT && volt < PV_MAX_VOLT)
-	{
+//	if(volt > PV_MIN_VOLT && volt < PV_MAX_VOLT)
+//	{
 		SPIC.CTRL |= SPI_ENABLE_bm;
 		PORTD.OUT &= ~(1<<pin);
 
@@ -148,7 +147,7 @@ void DacSendVolt(unsigned char volt, unsigned char pin)
 
 		PORTD.OUT |= (1<<pin);
 	  	SPIC.CTRL &= ~SPI_ENABLE_bm;
-	}
+//	}
 }
 
 // ADCA channel data read function using polled mode
@@ -174,7 +173,6 @@ signed int adca_read(unsigned char channel)
 	//if(data >= adca_offset){ data-=adca_offset;}
 	return data;	
 }
-
 
 void adca_chan_config(uint8_t c0,uint8_t c1,uint8_t c2,uint8_t c3)
 {
@@ -327,18 +325,17 @@ void system_clocks_init(void)
 	CLKSYS_Disable( OSC_XOSCEN_bm );
 } 
 
-
-// PORTD:3 - HSS_CS  (active low)
-// PORTC:5 - MOSI
-// PORTC:6 - MISO
-// PORTC:7 - SCK
 void SpiInit(void)
 {
-  PORTC.DIR |= PIN5_bm | PIN6_bm | PIN7_bm;
-  PORTC.PIN4CTRL = PORT_OPC_WIREDANDPULL_gc; 	// Pull-up SS 
+  PORTC.DIR = 0xB0;  // configure MOSI, SS, CLK as outputs on PORTD
+//  PORTC.DIRCLR = PIN6_bm; // miso auf input
+//  PORTC.DIRSET = PIN7_bm; // clock auf output
+//  PORTC.DIRSET = PIN5_bm; // mosi auf output
+  //  PORTC.PIN4CTRL = PORT_OPC_WIREDANDPULL_gc; 	// Pull-up SS 
   // enable SPI master mode, CLK/64 (@32MHz=>500KHz)
-  SPIC.CTRL |= SPI_MASTER_bm | SPI_MODE_1_gc | SPI_PRESCALER_DIV16_gc ;
-  SPIC.INTCTRL = PMIC_LOLVLEN_bm; // enable LOW LEVEL INTERRUPT 
+  SPIC.CTRL = SPI_ENABLE_bm | SPI_MASTER_bm | SPI_MODE_0_gc | SPI_PRESCALER_DIV64_gc;
+  // enable LOW LEVEL INTERRUPT
+//  SPIC.INTCTRL = SPI_INTLVL_LO_gc;
 };
 
 void SpiWrite(char data)

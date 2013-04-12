@@ -38,8 +38,8 @@
 #define MPP_DAC_CS PIN3
 #define LEV_DAC_CS PIN2
 
-#define PV_MAX_VOLT 	18  // = 76V
-#define PV_MIN_VOLT	157 // = 66V
+#define PV_MIN_VOLT 	18  // = 76V
+#define PV_MAX_VOLT	157 // = 66V
 
 #define U_CHAR ADC_CH_MUXPOS_PIN0_gc 
 #define I_CHAR ADC_CH_MUXPOS_PIN1_gc 
