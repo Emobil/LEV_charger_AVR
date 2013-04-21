@@ -1,8 +1,8 @@
-/*! Defining an example slave address. */
+/*! Defining TWI slave address. */
 #define SLAVE_ADDRESS    0x55
 
-/*! Defining number of bytes in buffer. */
-#define TWI_NUM_BYTES        10
+/*! Defining number of bytes in TWI buffer. */
+#define TWI_NUM_BYTES        12
 
 /*! CPU speed 32MHz, BAUDRATE 100kHz and Baudrate Register Settings */
 #define CPU_SPEED       32000000
@@ -17,11 +17,11 @@
 #define SG_EN PORTB.OUT |= PIN2_bm
 #define SG_DE PORTB.OUT &= ~PIN2_bm
 
-#define EN_MPP PORTD.OUT |= PIN0_bm
-#define DE_MPP PORTD.OUT &= ~PIN0_bm
+#define MPP_EN PORTD.OUT |= PIN0_bm
+#define MPP_DE PORTD.OUT &= ~PIN0_bm
 
-#define EN_CHARGER PORTD.OUT |= PIN1_bm
-#define DE_CHARGER PORTD.OUT &= ~PIN1_bm
+#define CHARGER_EN PORTD.OUT |= PIN1_bm
+#define CHARGER_DE PORTD.OUT &= ~PIN1_bm
 
 #define TSS_DAC_CS PORTD.OUT |= PIN2_bm
 #define TSS_DAC_DS PORTD.OUT &= ~PIN2_bm
@@ -45,20 +45,36 @@
 #define I_CHAR ADC_CH_MUXPOS_PIN1_gc 
 #define U_BATT ADC_CH_MUXPOS_PIN2_gc 
 #define I_BATT ADC_CH_MUXPOS_PIN3_gc 
-#define U_SOL ADC_CH_MUXPOS_PIN4_gc 
-#define I_SOL ADC_CH_MUXPOS_PIN5_gc 
+#define U_SOL  ADC_CH_MUXPOS_PIN4_gc 
+#define I_SOL  ADC_CH_MUXPOS_PIN5_gc 
 #define I_BATT_OUT ADC_CH_MUXPOS_PIN6_gc 
 #define T_BATT_1 ADC_CH_MUXPOS_PIN7_gc 
 #define T_BATT_2 ADC_CH_MUXPOS_PIN8_gc 
+
+#define TWI_CMD_GET_MPP_DATA 	0x22
+#define TWI_CMD_GET_LEV_DATA 	0x23
+#define TWI_CMD_SG_EN		0x30
+#define TWI_CMD_SG_DE		0x31
+#define TWI_CMD_OUT_EN		0x32
+#define TWI_CMD_OUT_DE		0x33
+#define TWI_CMD_CHAR_EN		0x34
+#define TWI_CMD_CHAR_DE		0x35
+#define TWI_CMD_MPP_EN		0x36
+#define TWI_CMD_MPP_DE		0x37
 
 /* Global variables */
 TWI_Slave_t twiSlave;    
 unsigned char adca_offset;
 signed int adca_data_0, adca_data_1, adca_data_2, adca_data_3;
+unsigned char leds,time;
+unsigned char u_batt_h, u_batt_l, i_batt_h, i_batt_l = 0x00;
+unsigned char u_sol_h, u_sol_l, i_sol_h, i_sol_l = 0x00;
+unsigned char u_char_h, u_char_l, i_char_h, i_char_l = 0x00;
+unsigned char i_bat_out_h, i_bat_out_l = 0x00;
 
 /* function prototypes */
 void SpiInit(void);
-char SpiRead();
+char SpiRead(void);
 void SpiWrite(char data);
 char SpiWriteRead(char data);
 void DacSendVolt(unsigned char volt, unsigned char pin);

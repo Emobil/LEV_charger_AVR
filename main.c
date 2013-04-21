@@ -12,8 +12,6 @@
 #include "clksys_driver.h"
 #include "main.h"
 
-unsigned char leds,time;
-
 int main(void)
 {
 	/* system clocks initialization */
@@ -39,31 +37,17 @@ int main(void)
 	adca_init();
 
 	/* initial disable controller ICs */
-	DE_MPP;
-	DE_CHARGER;
-
+	MPP_DE;
+	CHARGER_DE;
 	/* disable out-voltage monitor */
 	OUTMON_DS;
+	/* disable input switch */
+	SG_DE;
 
 	/* configure feedback voltages */
 //	DacSendVolt(197, LEV_DAC_CS);
 	DacSendVolt(20, MPP_DAC_CS);
 	_delay_ms(1);
-
-	/* enable input switch */
-//	SG_EN;
-	_delay_ms(1);
-
-	/* enable output switch*/
-//	OUTPUT_EN;
-	_delay_ms(1);
-
-	/* enable controller */
-	EN_CHARGER;
-	EN_MPP;
-
-//	adca_chan_config(U_CHAR,I_CHAR,I_BATT_OUT,U_BATT);
-	adca_chan_config(U_BATT,I_BATT,U_SOL,I_SOL);
 
 	/* Set up Timer/Counter 0 to work from CPUCLK/64, with period 10000 */
 	/* With 32Mhz -> t=20ms */
@@ -75,38 +59,55 @@ int main(void)
 
 	while (1) {
 
+		/* configure ADC channels for MPP */
+		adca_chan_config(U_BATT,I_BATT,U_SOL,I_SOL);
+		_delay_us(1);
+		/* read ADC data */
+		adca_data_0 = adca_read(0);
+		adca_data_1 = adca_read(1);
+		adca_data_2 = adca_read(2);
+		adca_data_3 = adca_read(3);
+	
+		/* actualize global readings */
+		u_batt_h = (adca_data_0 >> 8);
+		u_batt_l = (adca_data_0 & 0xFF); 
+		i_batt_h = (adca_data_1 >> 8);
+		i_batt_l = (adca_data_1 & 0xFF); 
+		u_sol_h  = (adca_data_2 >> 8);
+		u_sol_l  = (adca_data_2 & 0xFF); 
+		i_sol_h  = (adca_data_3 >> 8);
+		i_sol_l  = (adca_data_3 & 0xFF); 
+	
+		/* configure ADC channels for charger */
+		adca_chan_config(U_CHAR,I_CHAR,I_BATT_OUT,U_BATT);
+		_delay_us(1);
+		/* read ADC data */
+		adca_data_0 = adca_read(0);
+		adca_data_1 = adca_read(1);
+		adca_data_2 = adca_read(2);
+	
+		/* actualize global readings */
+		u_char_h = (adca_data_0 >> 8);
+		u_char_l = (adca_data_0 & 0xFF); 
+		i_char_h = (adca_data_1 >> 8);
+		i_char_l = (adca_data_1 & 0xFF); 
+		i_bat_out_h  = (adca_data_2 >> 8);
+		i_bat_out_l  = (adca_data_2 & 0xFF); 
+
 //	 	PORTC.OUTTGL = PIN5_bm | PIN7_bm; 
 
 //		DacSendVolt(197, LEV_DAC_CS);
 //		DacSendVolt(60, MPP_DAC_CS);
 
 
-		/* read ADC data */
-		adca_data_0 = adca_read(0); 		_delay_us(1); 
-		adca_data_1 = adca_read(1);		_delay_us(1);
-		adca_data_2 = adca_read(2);		_delay_us(1);
-		adca_data_3 = adca_read(3); 		_delay_us(1);
-
-		/* actualize TWI registers */
-		twiSlave.sendData[0] = (adca_data_0 >> 8);
-		twiSlave.sendData[1] = (adca_data_0 & 0xFF); 
-		twiSlave.sendData[2] = (adca_data_1 >> 8);
-		twiSlave.sendData[3] = (adca_data_1 & 0xFF); 
-		twiSlave.sendData[4] = (adca_data_2 >> 8);
-		twiSlave.sendData[5] = (adca_data_2 & 0xFF); 
-		twiSlave.sendData[6] = (adca_data_3 >> 8);
-		twiSlave.sendData[7] = (adca_data_3 & 0xFF); 
-
 	}
 }
 
-/* Toggle LEDs every 1s */
-ISR(TCC0_OVF_vect)
-{
+ISR(TCC0_OVF_vect) 
+{	
+	/* Toggle LEDs every 1s */
 	time++;
 	if(time >= 50){
-		//if(leds <16){leds++;}else {leds = 0x00;}
-//		LEDPORT.OUT = leds; 
 		time = 0x00;
 		LEDPORT.OUTTGL = 0xFF;
 	}
@@ -120,7 +121,36 @@ ISR(TWIC_TWIS_vect)
 
 void TWIC_SlaveProcessData(void)
 {
-	PORTE.OUT = twiSlave.receivedData[2];
+	if (twiSlave.receivedData[0] == TWI_CMD_GET_MPP_DATA){
+		/* actualize TWI registers for MPP */
+		twiSlave.sendData[1] = u_batt_h;
+		twiSlave.sendData[2] = u_batt_l; 
+		twiSlave.sendData[3] = i_batt_h;
+		twiSlave.sendData[4] = i_batt_l; 
+		twiSlave.sendData[5] = u_sol_h;
+		twiSlave.sendData[6] = u_sol_l; 
+		twiSlave.sendData[7] = i_sol_h;
+		twiSlave.sendData[8] = i_sol_l; 
+	} else if (twiSlave.receivedData[0] == TWI_CMD_GET_LEV_DATA){
+		/* actualize TWI registers for Charger */
+		twiSlave.sendData[1] = u_char_h;
+		twiSlave.sendData[2] = u_char_l; 
+		twiSlave.sendData[3] = i_char_h;
+		twiSlave.sendData[4] = i_char_l; 
+		twiSlave.sendData[5] = i_bat_out_h;
+		twiSlave.sendData[6] = i_bat_out_l; 
+		twiSlave.sendData[7] = u_batt_h;
+		twiSlave.sendData[8] = u_batt_l; 
+	} 
+	else if (twiSlave.receivedData[0] == TWI_CMD_SG_EN){SG_EN;}
+	else if (twiSlave.receivedData[0] == TWI_CMD_SG_DE){SG_DE;}
+	else if (twiSlave.receivedData[0] == TWI_CMD_OUT_EN){OUTPUT_EN;}
+	else if (twiSlave.receivedData[0] == TWI_CMD_OUT_DE){OUTPUT_DE;}
+	else if (twiSlave.receivedData[0] == TWI_CMD_CHAR_EN){CHARGER_EN;}
+	else if (twiSlave.receivedData[0] == TWI_CMD_CHAR_DE){CHARGER_DE;}
+	else if (twiSlave.receivedData[0] == TWI_CMD_MPP_EN){MPP_EN;}
+	else if (twiSlave.receivedData[0] == TWI_CMD_MPP_DE){MPP_DE;}
+
 }
 
 void DacHighZ(unsigned char pin)
@@ -161,10 +191,11 @@ signed int adca_read(unsigned char channel)
 	// Start the AD conversion
 //	pch->CTRL|=ADC_CH_START_bm;
 	// Wait for the AD conversion to complete
-//	while ((pch->INTFLAGS & ADC_CH_CHIF_bm)==0);
+	while ((pch->INTFLAGS & ADC_CH_CHIF_bm)==0);
 	// Clear the interrupt flag
 //	pch->INTFLAGS=ADC_CH_CHIF_bm;
 	// Read the AD conversion result
+
 	((unsigned char *) &data)[0]=pch->RESL;
 	((unsigned char *) &data)[1]=pch->RESH;
 
@@ -172,6 +203,7 @@ signed int adca_read(unsigned char channel)
 	// Compensate the ADC offset	
 	//if(data >= adca_offset){ data-=adca_offset;}
 	return data;	
+
 }
 
 void adca_chan_config(uint8_t c0,uint8_t c1,uint8_t c2,uint8_t c3)
