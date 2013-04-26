@@ -72,7 +72,7 @@ unsigned char u_sol_h, u_sol_l, i_sol_h, i_sol_l = 0x00;
 unsigned char u_char_h, u_char_l, i_char_h, i_char_l = 0x00;
 unsigned char i_bat_out_h, i_bat_out_l = 0x00;
 unsigned int u_batt, i_batt, u_sol, i_sol, u_char, i_char, i_bat_out;
-unsigned char mpp_sollwert;
+unsigned char mpp_sollwert
 
 
 /* function prototypes */

@@ -179,7 +179,7 @@ void TWIC_SlaveProcessData(void)
 	else if (twiSlave.receivedData[0] == TWI_CMD_CHAR_DE){CHARGER_DE;}
 	else if (twiSlave.receivedData[0] == TWI_CMD_MPP_EN){MPP_EN;}
 	else if (twiSlave.receivedData[0] == TWI_CMD_MPP_DE){MPP_DE;}
-	else if (twiSlave.receivedData[0] == TWI_CMD_OUT_VOLT){mpp_sollwert = twiSlave.receivedData[1];}
+	else if (twiSlave.receivedData[0] == TWI_CMD_OUT_VOLT){mpp_sollwert = twiSlave.receivedData[1]}
 	
 }
 
