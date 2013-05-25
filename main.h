@@ -62,6 +62,7 @@
 #define TWI_CMD_MPP_EN		0x36
 #define TWI_CMD_MPP_DE		0x37
 #define TWI_CMD_OUT_VOLT	0x38
+#define TWI_CMD_CHAR_VOLT	0x39
 
 /* Global variables */
 TWI_Slave_t twiSlave;    
@@ -72,7 +73,8 @@ unsigned char u_sol_h, u_sol_l, i_sol_h, i_sol_l = 0x00;
 unsigned char u_char_h, u_char_l, i_char_h, i_char_l = 0x00;
 unsigned char i_bat_out_h, i_bat_out_l = 0x00;
 unsigned int u_batt, i_batt, u_sol, i_sol, u_char, i_char, i_bat_out;
-unsigned char mpp_sollwert;
+unsigned char mpp_sollwert, char_sollwert;
+unsigned long p_mpp;
 
 
 /* function prototypes */
@@ -88,3 +90,4 @@ void adca_init(void);
 void adca_chan_config(uint8_t c0,uint8_t c1,uint8_t c2,uint8_t c3);
 void system_clocks_init(void);
 void TWIC_SlaveProcessData(void);
+void mpp_tracking(unsigned int, unsigned int );

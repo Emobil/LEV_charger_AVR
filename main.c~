@@ -12,8 +12,6 @@
 #include "clksys_driver.h"
 #include "main.h"
 
-#include "FloatingAverage.h"
-
 int main(void)
 {
 	/* system clocks initialization */
@@ -59,65 +57,47 @@ int main(void)
 	/* Enable timer 0 overflow interrupt */
 	TCC0.INTCTRLA = ( TCC0.INTCTRLA & ~TC0_OVFINTLVL_gm ) | TC_OVFINTLVL_MED_gc;
 
-	/* Initialize Floating Average */
-	// Datenstruktur anlegen:
-        tFloatAvgFilter FilterVoltageBatt, FilterCurrentBatt, FilterVoltageSol, FilterCurrentSol;
-        // initialisieren und mit 0 fuellen
-        InitFloatAvg(&FilterVoltageBatt, 0);
-        InitFloatAvg(&FilterCurrentBatt, 0);
-        InitFloatAvg(&FilterVoltageSol, 0);
-        InitFloatAvg(&FilterCurrentSol, 0);
-
-	mpp_sollwert = 20;
-
 	while (1) {
 
 		/* configure ADC channels for MPP */
 		adca_chan_config(U_BATT,I_BATT,U_SOL,I_SOL);
-		//_delay_us(1);
-		/* read ADC data and collect gloabl measurement data*/
-		AddToFloatAvg(&FilterVoltageBatt, adca_read(0));
-		AddToFloatAvg(&FilterCurrentBatt, adca_read(1));
-		AddToFloatAvg(&FilterVoltageSol,  adca_read(2));
-		AddToFloatAvg(&FilterCurrentSol,  adca_read(3));
-	
-		/* Get values from floating average */
-		u_batt = GetOutputValue(&FilterVoltageBatt);
-		i_batt = GetOutputValue(&FilterCurrentBatt);
-		u_sol  = GetOutputValue(&FilterVoltageSol);
-		i_sol  = GetOutputValue(&FilterCurrentSol);
-
-		/* actualize global readings */
-		u_batt_h = (u_batt >> 8);
-		u_batt_l = (u_batt & 0xFF); 
-		i_batt_h = (i_batt >> 8);
-		i_batt_l = (i_batt & 0xFF); 
-		u_sol_h  = (u_sol >> 8);
-		u_sol_l  = (u_sol & 0xFF); 
-		i_sol_h  = (i_sol >> 8);
-		i_sol_l  = (i_sol & 0xFF); 
-	
-//		mpp_tracking(u_batt, i_batt);
-
-		/* configure ADC channels for charger */
-//		adca_chan_config(U_CHAR,I_CHAR,I_BATT_OUT,U_BATT);
-//		_delay_us(1);
+		_delay_us(1);
 		/* read ADC data */
-//		u_char = adca_read(0);
-//		i_char = adca_read(1);
-//		i_bat_out = adca_read(2);
+		adca_data_0 = adca_read(0);
+		adca_data_1 = adca_read(1);
+		adca_data_2 = adca_read(2);
+		adca_data_3 = adca_read(3);
 	
 		/* actualize global readings */
-//		u_char_h = (u_char >> 8);
-//		u_char_l = (u_char & 0xFF); 
-//		i_char_h = (i_char >> 8);
-//		i_char_l = (i_char & 0xFF); 
-//		i_bat_out_h  = (i_bat_out >> 8);
-//		i_bat_out_l  = (i_bat_out & 0xFF); 
+		u_batt_h = (adca_data_0 >> 8);
+		u_batt_l = (adca_data_0 & 0xFF); 
+		i_batt_h = (adca_data_1 >> 8);
+		i_batt_l = (adca_data_1 & 0xFF); 
+		u_sol_h  = (adca_data_2 >> 8);
+		u_sol_l  = (adca_data_2 & 0xFF); 
+		i_sol_h  = (adca_data_3 >> 8);
+		i_sol_l  = (adca_data_3 & 0xFF); 
+	
+		/* configure ADC channels for charger */
+		adca_chan_config(U_CHAR,I_CHAR,I_BATT_OUT,U_BATT);
+		_delay_us(1);
+		/* read ADC data */
+		adca_data_0 = adca_read(0);
+		adca_data_1 = adca_read(1);
+		adca_data_2 = adca_read(2);
+	
+		/* actualize global readings */
+		u_char_h = (adca_data_0 >> 8);
+		u_char_l = (adca_data_0 & 0xFF); 
+		i_char_h = (adca_data_1 >> 8);
+		i_char_l = (adca_data_1 & 0xFF); 
+		i_bat_out_h  = (adca_data_2 >> 8);
+		i_bat_out_l  = (adca_data_2 & 0xFF); 
+
+//	 	PORTC.OUTTGL = PIN5_bm | PIN7_bm; 
 
 //		DacSendVolt(197, LEV_DAC_CS);
-
-		DacSendVolt(mpp_sollwert, MPP_DAC_CS);
+		DacSendVolt(160, MPP_DAC_CS);
 
 
 	}
@@ -138,15 +118,6 @@ ISR(TWIC_TWIS_vect)
 {
 	TWI_SlaveInterruptHandler(&twiSlave);
 }
-
-/*void mpp_tracking(unsigned int u, unsigned int i)
-{
-	unsigned int p = u * i;
-	if (p_batt < p)
-	{
-		DacSendVolt(20, MPP_DAC_CS);
-	return 0;
-}*/
 
 void TWIC_SlaveProcessData(void)
 {
@@ -179,8 +150,7 @@ void TWIC_SlaveProcessData(void)
 	else if (twiSlave.receivedData[0] == TWI_CMD_CHAR_DE){CHARGER_DE;}
 	else if (twiSlave.receivedData[0] == TWI_CMD_MPP_EN){MPP_EN;}
 	else if (twiSlave.receivedData[0] == TWI_CMD_MPP_DE){MPP_DE;}
-	else if (twiSlave.receivedData[0] == TWI_CMD_OUT_VOLT){mpp_sollwert = twiSlave.receivedData[1]}
-	
+
 }
 
 void DacHighZ(unsigned char pin)
@@ -201,9 +171,10 @@ void DacSendVolt(unsigned char volt, unsigned char pin)
 //	{
 		SPIC.CTRL |= SPI_ENABLE_bm;
 		PORTD.OUT &= ~(1<<pin);
+
 		SpiWrite(volt >> 4);
 		SpiWrite((volt & 0xF) << 4);  
-	
+
 		PORTD.OUT |= (1<<pin);
 	  	SPIC.CTRL &= ~SPI_ENABLE_bm;
 //	}
@@ -216,8 +187,7 @@ signed int adca_read(unsigned char channel)
 //	_delay_us(1);
 	ADC_CH_t *pch=&ADCA.CH0+channel;
 	signed int data;
-	uint32_t sum_h = 0;
-	uint32_t sum_l = 0;
+
 	// Start the AD conversion
 //	pch->CTRL|=ADC_CH_START_bm;
 	// Wait for the AD conversion to complete
@@ -225,16 +195,13 @@ signed int adca_read(unsigned char channel)
 	// Clear the interrupt flag
 //	pch->INTFLAGS=ADC_CH_CHIF_bm;
 	// Read the AD conversion result
-	for (uint8_t i=0; i<128;i++){
-		sum_l += pch->RESL;
-		sum_h += pch->RESH;
-	}
-	((unsigned char *) &data)[0]=sum_l / 128;
-	((unsigned char *) &data)[1]=sum_h / 128;
+
+	((unsigned char *) &data)[0]=pch->RESL;
+	((unsigned char *) &data)[1]=pch->RESH;
 
 //	ADCA.CTRLA &= ~ADC_ENABLE_bm;	// disable ADC
 	// Compensate the ADC offset	
-	if(data >= adca_offset) {data-=adca_offset;} else {data = 0x00;}
+	//if(data >= adca_offset){ data-=adca_offset;}
 	return data;	
 
 }

@@ -46,9 +46,9 @@ int main(void)
 	/* disable input switch */
 	SG_DE;
 
-	/* configure feedback voltages */
+	/* configure initial feedback voltages */
 //	DacSendVolt(197, LEV_DAC_CS);
-	DacSendVolt(20, MPP_DAC_CS);
+//	DacSendVolt(20, MPP_DAC_CS);
 	_delay_ms(1);
 
 	/* Set up Timer/Counter 0 to work from CPUCLK/64, with period 10000 */
@@ -61,20 +61,49 @@ int main(void)
 
 	/* Initialize Floating Average */
 	// Datenstruktur anlegen:
-        tFloatAvgFilter FilterVoltageBatt, FilterCurrentBatt, FilterVoltageSol, FilterCurrentSol;
+        tFloatAvgFilter FilterVoltageBatt, FilterCurrentBatt, FilterVoltageSol, FilterCurrentSol, FilterVoltagLEV, FilterCurrentLEV, FilterCurrentBattOut;
         // initialisieren und mit 0 fuellen
         InitFloatAvg(&FilterVoltageBatt, 0);
         InitFloatAvg(&FilterCurrentBatt, 0);
         InitFloatAvg(&FilterVoltageSol, 0);
         InitFloatAvg(&FilterCurrentSol, 0);
+        InitFloatAvg(&FilterVoltagLEV, 0);
+        InitFloatAvg(&FilterCurrentLEV, 0);
+        InitFloatAvg(&FilterCurrentBattOut, 0);
 
-	mpp_sollwert = 20;
 
+	char_sollwert = 156;
+	mpp_sollwert = 245;
+	p_mpp = 0x00;
+//	DacSendVolt(char_sollwert, LEV_DAC_CS);
+	DacSendVolt(mpp_sollwert, MPP_DAC_CS);
 	while (1) {
 
 		/* configure ADC channels for MPP */
+		adca_chan_config(U_CHAR,I_CHAR,I_BATT_OUT,U_BATT);
+
+		AddToFloatAvg(&FilterVoltagLEV, adca_read(0));
+		AddToFloatAvg(&FilterCurrentLEV, adca_read(1));
+		AddToFloatAvg(&FilterCurrentBattOut, adca_read(2));
+//		AddToFloatAvg(&FilterVoltageBatt,  adca_read(3));
+
+		u_char = GetOutputValue(&FilterVoltagLEV);
+		i_char = GetOutputValue(&FilterCurrentLEV);
+		i_bat_out  = GetOutputValue(&FilterCurrentBattOut);
+//		u_batt  = GetOutputValue(&FilterVoltageBatt);
+
+		u_char_h = (u_char >> 8);
+		u_char_l = (u_char & 0xFF); 
+		i_char_h = (i_char >> 8);
+		i_char_l = (i_char & 0xFF); 
+		i_bat_out_h  = (i_bat_out >> 8);
+		i_bat_out_l  = (i_bat_out & 0xFF); 
+//		u_batt_h  = (u_batt >> 8);
+//		u_batt_l  = (u_batt & 0xFF); 
+
+		_delay_us(1);
+
 		adca_chan_config(U_BATT,I_BATT,U_SOL,I_SOL);
-		//_delay_us(1);
 		/* read ADC data and collect gloabl measurement data*/
 		AddToFloatAvg(&FilterVoltageBatt, adca_read(0));
 		AddToFloatAvg(&FilterCurrentBatt, adca_read(1));
@@ -96,29 +125,14 @@ int main(void)
 		u_sol_l  = (u_sol & 0xFF); 
 		i_sol_h  = (i_sol >> 8);
 		i_sol_l  = (i_sol & 0xFF); 
+
 	
-//		mpp_tracking(u_batt, i_batt);
+	//	mpp_tracking(u_batt, i_batt);
 
-		/* configure ADC channels for charger */
-//		adca_chan_config(U_CHAR,I_CHAR,I_BATT_OUT,U_BATT);
-//		_delay_us(1);
-		/* read ADC data */
-//		u_char = adca_read(0);
-//		i_char = adca_read(1);
-//		i_bat_out = adca_read(2);
-	
-		/* actualize global readings */
-//		u_char_h = (u_char >> 8);
-//		u_char_l = (u_char & 0xFF); 
-//		i_char_h = (i_char >> 8);
-//		i_char_l = (i_char & 0xFF); 
-//		i_bat_out_h  = (i_bat_out >> 8);
-//		i_bat_out_l  = (i_bat_out & 0xFF); 
-
-//		DacSendVolt(197, LEV_DAC_CS);
-
+		_delay_us(1);
+//		DacSendVolt(char_sollwert, LEV_DAC_CS);
+		_delay_us(1);
 		DacSendVolt(mpp_sollwert, MPP_DAC_CS);
-
 
 	}
 }
@@ -139,14 +153,17 @@ ISR(TWIC_TWIS_vect)
 	TWI_SlaveInterruptHandler(&twiSlave);
 }
 
-/*void mpp_tracking(unsigned int u, unsigned int i)
+void mpp_tracking(unsigned int u, unsigned int i)
 {
-	unsigned int p = u * i;
-	if (p_batt < p)
+	unsigned long p = u * i;
+	if (p_mpp > p)
 	{
-		DacSendVolt(20, MPP_DAC_CS);
-	return 0;
-}*/
+		DacSendVolt(mpp_sollwert++, MPP_DAC_CS);
+	}else if (p_mpp < p){
+		DacSendVolt(mpp_sollwert--, MPP_DAC_CS);
+	}
+	p_mpp = p;
+}
 
 void TWIC_SlaveProcessData(void)
 {
@@ -180,6 +197,7 @@ void TWIC_SlaveProcessData(void)
 	else if (twiSlave.receivedData[0] == TWI_CMD_MPP_EN){MPP_EN;}
 	else if (twiSlave.receivedData[0] == TWI_CMD_MPP_DE){MPP_DE;}
 	else if (twiSlave.receivedData[0] == TWI_CMD_OUT_VOLT){mpp_sollwert = twiSlave.receivedData[1];}
+	else if (twiSlave.receivedData[0] == TWI_CMD_CHAR_VOLT){char_sollwert = twiSlave.receivedData[1];}
 	
 }
 
@@ -201,6 +219,7 @@ void DacSendVolt(unsigned char volt, unsigned char pin)
 //	{
 		SPIC.CTRL |= SPI_ENABLE_bm;
 		PORTD.OUT &= ~(1<<pin);
+
 		SpiWrite(volt >> 4);
 		SpiWrite((volt & 0xF) << 4);  
 	
@@ -241,38 +260,31 @@ signed int adca_read(unsigned char channel)
 
 void adca_chan_config(uint8_t c0,uint8_t c1,uint8_t c2,uint8_t c3)
 {
-// ADC channel 0 gain: 1
+	// ADC channel 0 gain: 1
 	// ADC channel 0 input mode: Single-ended positive input signal
 	ADCA.CH0.CTRL=(ADCA.CH0.CTRL & (~(ADC_CH_START_bm | ADC_CH_GAINFAC_gm | ADC_CH_INPUTMODE_gm))) |
 	ADC_CH_GAIN_1X_gc | ADC_CH_INPUTMODE_SINGLEENDED_gc;
-
 	// ADC channel 0 positive input: ADC0 pin
 	// ADC channel 0 negative input: GND
 	ADCA.CH0.MUXCTRL=(ADCA.CH0.MUXCTRL & (~(ADC_CH_MUXPOS_gm | ADC_CH_MUXNEG_gm))) | c0;
-
 	// ADC channel 1 gain: 1
 	// ADC channel 1 input mode: Single-ended positive input signal
 	ADCA.CH1.CTRL=(ADCA.CH1.CTRL & (~(ADC_CH_START_bm | ADC_CH_GAINFAC_gm | ADC_CH_INPUTMODE_gm))) |
 	ADC_CH_GAIN_1X_gc | ADC_CH_INPUTMODE_SINGLEENDED_gc;
-
 	// ADC channel 1 positive input: ADC1 pin
 	// ADC channel 1 negative input: GND
 	ADCA.CH1.MUXCTRL=(ADCA.CH1.MUXCTRL & (~(ADC_CH_MUXPOS_gm | ADC_CH_MUXNEG_gm))) | c1;
-
 	// ADC channel 2 gain: 1
 	// ADC channel 2 input mode: Single-ended positive input signal
 	ADCA.CH2.CTRL=(ADCA.CH2.CTRL & (~(ADC_CH_START_bm | ADC_CH_GAINFAC_gm | ADC_CH_INPUTMODE_gm))) |
 	ADC_CH_GAIN_1X_gc | ADC_CH_INPUTMODE_SINGLEENDED_gc;
-
 	// ADC channel 2 positive input: ADC2 pin	
 	// ADC channel 2 negative input: GND
 	ADCA.CH2.MUXCTRL=(ADCA.CH2.MUXCTRL & (~(ADC_CH_MUXPOS_gm | ADC_CH_MUXNEG_gm))) | c2;
-
 	// ADC channel 3 gain: 1	
 	// ADC channel 3 input mode: Single-ended positive input signal
 	ADCA.CH3.CTRL=(ADCA.CH3.CTRL & (~(ADC_CH_START_bm | ADC_CH_GAINFAC_gm | ADC_CH_INPUTMODE_gm))) |
 	ADC_CH_GAIN_1X_gc | ADC_CH_INPUTMODE_SINGLEENDED_gc;
-
 	// ADC channel 3 positive input: ADC3 pin
 	// ADC channel 3 negative input: GND
 	ADCA.CH3.MUXCTRL=(ADCA.CH3.MUXCTRL & (~(ADC_CH_MUXPOS_gm | ADC_CH_MUXNEG_gm))) | c3;
