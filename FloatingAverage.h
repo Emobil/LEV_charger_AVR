@@ -5,7 +5,7 @@
 
 // Ueber wieviele Werte soll der gleitende Mittelwert berechnet werden?
 // Zulaessige Werte 1..255
-#define SIZE_OF_AVG  8
+#define SIZE_OF_AVG 255
 
 // Datentyp, ueber den der gleitende Mittelwert berechnet werden soll.
 typedef uint16_t tFloatAvgType;
@@ -18,7 +18,7 @@ typedef uint32_t tTempSumType;
 
 // Die Struktur, in der die Daten zwischengespeichert werden
 typedef struct
- {
+{
 	tFloatAvgType aData[SIZE_OF_AVG];
 	uint8_t IndexNextValue;
  } tFloatAvgFilter;

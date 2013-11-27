@@ -2,7 +2,7 @@
 #define SLAVE_ADDRESS    0x55
 
 /*! Defining number of bytes in TWI buffer. */
-#define TWI_NUM_BYTES        12
+#define TWI_NUM_BYTES        16
 
 /*! CPU speed 32MHz, BAUDRATE 100kHz and Baudrate Register Settings */
 #define CPU_SPEED       32000000
@@ -38,9 +38,6 @@
 #define MPP_DAC_CS PIN3
 #define LEV_DAC_CS PIN2
 
-#define PV_MIN_VOLT 	18  // = 76V
-#define PV_MAX_VOLT	157 // = 66V
-
 #define U_CHAR ADC_CH_MUXPOS_PIN0_gc 
 #define I_CHAR ADC_CH_MUXPOS_PIN1_gc 
 #define U_BATT ADC_CH_MUXPOS_PIN2_gc 
@@ -61,8 +58,18 @@
 #define TWI_CMD_CHAR_DE		0x35
 #define TWI_CMD_MPP_EN		0x36
 #define TWI_CMD_MPP_DE		0x37
-#define TWI_CMD_OUT_VOLT	0x38
-#define TWI_CMD_CHAR_VOLT	0x39
+#define TWI_CMD_BATT_VOLT	0x38
+#define TWI_CMD_BATT_CURR	0x39
+#define TWI_CMD_CHAR_VOLT	0x40
+#define TWI_CMD_CHAR_CURR	0x41
+
+/* Status Modes */
+#define IDLE			0x01
+#define MPP_VOLTAGE_MODE	0x02
+#define MPP_CURRENT_MODE	0x03
+#define MPP_TRACKING		0x04
+#define LEV_VOLTAGE_MODE	0x05
+#define LEV_CURRENT_MODE	0x06
 
 /* Global variables */
 TWI_Slave_t twiSlave;    
@@ -73,16 +80,20 @@ unsigned char u_sol_h, u_sol_l, i_sol_h, i_sol_l = 0x00;
 unsigned char u_char_h, u_char_l, i_char_h, i_char_l = 0x00;
 unsigned char i_bat_out_h, i_bat_out_l = 0x00;
 unsigned int u_batt, i_batt, u_sol, i_sol, u_char, i_char, i_bat_out;
-unsigned char mpp_sollwert, char_sollwert;
-unsigned long p_mpp;
-
+unsigned int mpp_sollwert, char_sollwert;
+unsigned int u_batt_soll, i_batt_soll;
+unsigned int u_char_soll, i_char_soll;
+unsigned long p_mpp, p_mpp_old;
+unsigned int u_batt_old;
+unsigned char mppStatusFlag = IDLE; 
+unsigned char levStatusFlag = IDLE; 
 
 /* function prototypes */
 void SpiInit(void);
 char SpiRead(void);
 void SpiWrite(char data);
 char SpiWriteRead(char data);
-void DacSendVolt(unsigned char volt, unsigned char pin);
+void DacSendVolt(unsigned int volt, unsigned char pin);
 void DacHighZ(unsigned char pin);
 signed int adca_read(unsigned char channel);
 uint8_t read_calibration_byte( uint8_t index );
@@ -90,4 +101,6 @@ void adca_init(void);
 void adca_chan_config(uint8_t c0,uint8_t c1,uint8_t c2,uint8_t c3);
 void system_clocks_init(void);
 void TWIC_SlaveProcessData(void);
-void mpp_tracking(unsigned int, unsigned int );
+void mpp_trigger(void);
+void lev_charging(void);
+void setVoltage(unsigned char voltage);

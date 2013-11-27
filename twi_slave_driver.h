@@ -79,7 +79,7 @@ typedef enum TWIS_RESULT_enum {
 
 /* Buffer size defines. */
 #define TWIS_RECEIVE_BUFFER_SIZE         6
-#define TWIS_SEND_BUFFER_SIZE            12
+#define TWIS_SEND_BUFFER_SIZE            16
 
 
 
